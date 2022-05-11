@@ -1,1 +1,4 @@
-# MyFirstPython3
+Ryan Stevens
+restevens52@gmail.com
+
+My first few python 3 projects with codecademy! A refresher in python, just to get my bearings and have someting to show for it too! 
