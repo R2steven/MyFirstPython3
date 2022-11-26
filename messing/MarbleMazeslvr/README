@@ -1,0 +1,19 @@
+##############################################
+
+Ryan Stevens
+restevens52@gail.com
+
+Title:
+Marble Maze wavefunction collapse
+###########################################
+
+
+Idea: implement wavefunction collapse for 'Gravity Maze' type puzzles
+
+Interesting: wavefunction collapse as a solution to set boundary conditions (start, end, etc) is a decision tree, good project to implement ML.
+
+
+Node: implements a linked list graph.
+
+
+for solving the wavefunction collapse, want to 
