@@ -1,10 +1,13 @@
+import sys
+sys.path.insert(0,'..\..')
 import glfw
 import glfw.GLFW as GLFW_CONSTANTS
 from OpenGL.GL import *
-from OpenGL.GL.shaders import compileProgram,compileShader
+from tools.Entities import Entity,Player,Cube
+from tools.Objects import Mesh,ObjMesh,Material
+from tools.Shader import Shader as sdr
 import numpy as np
 import pyrr
-from PIL import Image
 
 
 ################### Constants        ########################################
@@ -12,248 +15,8 @@ from PIL import Image
 OBJECT_CUBE = 0
 OBJECT_CAMERA = 1
 
-################### Helper Functions ########################################
-
-class Shader():
-    """
-        COmpile and use Shader
-    """
-
-    def __init__(self, vertexPath:str, fragmentPath:str):
-        self.createShader(vertexPath,fragmentPath)
-        self.unifNames = {None:None}
-
-    def createShader(self,vertexPath:str, fragmentPath:str):
-
-        with open(vertexPath,'r') as f:
-            vertex_src = f.readlines()
-
-        with open(fragmentPath,'r') as f:
-            fragment_src = f.readlines()
-        
-        self.shader = compileProgram(compileShader(vertex_src,GL_VERTEX_SHADER),
-                                     compileShader(fragment_src,GL_FRAGMENT_SHADER))
-        
-    def use(self) -> None:
-        glUseProgram(self.shader)
-
-    def setBool(self, name:str, value:bool) -> None:
-        self.use()
-        glUniform1i(glGetUniformLocation(self.shader,name), int(value))
-
-    def setInt(self, name:str, value:int) -> None:
-        self.use()
-        glUniform1i(glGetUniformLocation(self.shader,name), value)
-
-    def setFloat(self, name:str, value:np.float32) -> None:
-        self.use()
-        glUniform1f(glGetUniformLocation(self.shader,name), value)
-    
-    def setVec2f(self,name:str, value) -> None:
-        self.use()
-        glUniform2f(glGetUniformLocation(self.shader,name), value[0], value[1])
-
-    def setMat4fv(self, name:str, Matrix4fv:pyrr.matrix44) -> None:
-        self.use()
-        if not(name in self.unifNames.keys()):
-            self.unifNames[name] = glGetUniformLocation(self.shader,name)
-        glUniformMatrix4fv(self.unifNames[name],1,GL_FALSE,Matrix4fv)
-
-    def deletePgm(self):
-        glDeleteProgram(self.shader)
-
-
-def load_model_from_file(filename:str) -> list[float]:
-    """ 
-        Read the given obj file and return a list of all the
-        vertex data.
-    """
-
-    v=[]
-    vt=[]
-    vn=[]
-    vertices=[]
-
-    with open(filename,'r') as f:
-        line = f.readline()
-        while line:
-            words = line.split(' ')
-            if words[0]=='v':
-                v.append(read_vertex_data(words))
-            elif words[0]=='vt':
-                vt.append(read_texcoord_data(words))
-            elif words[0]=='vn':
-                vn.append(read_normal_data(words))
-            elif words[0]=='f':
-                read_face_data(words,v,vt,vn,vertices)
-            line=f.readline()
-    
-    return vertices
-
-def read_vertex_data(words:list[str])->list[float]:
-    return [
-        float(words[1]),
-        float(words[2]),
-        float(words[3])
-    ]
-
-def read_texcoord_data(words:list[str])->list[float]:
-    return [
-        float(words[1]),
-        float(words[2])
-    ]
-
-def read_normal_data(words:list[str])->list[float]:
-    return [
-        float(words[1]),
-        float(words[2]),
-        float(words[3])
-    ]
-
-def read_face_data(words:list[str], 
-                   v:list[float],
-                   vt:list[float],
-                   vn:list[float],
-                   vertices:list[float]) -> list[float]:
-    
-    """
-        Read the given face description, and use the
-        data from the pre-filled v, vt, vn arrays to add
-        data to the vertices array
-    """
-
-    triangles_in_face = len(words)-3
-
-    for i in range(triangles_in_face):
-        read_corner(words[1],v,vt,vn,vertices)
-        read_corner(words[i+2],v,vt,vn,vertices)
-        read_corner(words[i+3],v,vt,vn,vertices)
-
-def read_corner(description: str, 
-    v: list[float], vt: list[float], vn: list[float], 
-    vertices: list[float]) -> None:
-    """
-        Read the given corner description, then send the
-        approprate v, vt, vn data to the vertices array.
-    """
-
-    v_vt_vn = description.split('/')
-
-    for x in v[int(v_vt_vn[0])-1]:
-        vertices.append(x)
-    for x in vt[int(v_vt_vn[1])-1]:
-        vertices.append(x)
-    for x in vn[int(v_vt_vn[2])-1]:
-        vertices.append(x)
-
 
 ################### Model #####################################################
-
-class Entity:
-    """ Represents a general object with a position and rotation applied"""
-
-    def __init__(self,
-                 position:list[float],
-                 eulers:list[float],
-                 objectType:int) -> None:
-        
-        """
-            Initialize the entity, store its state and update its transform.
-            Parameters:
-                position: The position of the entity in the world (x,y,z)
-                eulers: Angles (in degrees) representing rotations around the x,y,z axes.
-                objectType: The type of object which the entity represents,
-                            this should match a named constant.
-        """
-        self.position = np.array(position,dtype=np.float32)
-        self.eulers = np.array(eulers,dtype=np.float32)
-        self.objectType = objectType
-
-    def get_model_transform(self) ->np.ndarray:
-        """
-            Calculates and returns the entity's transform matrix,
-            based on its position and rotation.
-        """
-
-        model_transform = pyrr.matrix44.create_identity(dtype=np.float32)
-
-        model_transform = pyrr.matrix44.multiply(
-            m1=model_transform,
-            m2=pyrr.matrix44.create_from_z_rotation(
-            theta=np.radians(self.eulers[2]),
-            dtype=np.float32
-            )
-        )
-
-        model_transform = pyrr.matrix44.multiply(
-            m1=model_transform, 
-            m2=pyrr.matrix44.create_from_translation(
-                vec=self.position,
-                dtype=np.float32
-            )
-        )
-
-        return model_transform
-    
-    def update(self, rate: float) -> None:
-        raise NotImplementedError
-
-    
-class Cube(Entity):
-    def __init__(self,position:list[float],eulers:list[float]) -> None:
-        super().__init__(position,eulers,OBJECT_CUBE)
-
-    def update(self,rate:float) -> None:
-        self.eulers[2] += 0.25 * rate
-        if self.eulers[2] > 360:
-            self.eulers[2] -= 360
-
-class Player(Entity):
-    """ A first person camera controller. """
-
-    def __init__(self, position: list[float], eulers: list[float]) -> None:
-        super().__init__(position, eulers, OBJECT_CAMERA)
-
-        self.localUp = np.array([0,0,1],dtype=np.float32)
-
-        #directions after rotation
-        self.up = np.array([0,0,1],dtype=np.float32)
-        self.right = np.array([0,1,0],dtype=np.float32)
-        self.forwards = np.array([1,0,0],dtype=np.float32)
-
-    def calculate_vectors(self) -> None:
-
-        """ 
-            Calculate the camera's fundamental vectors.
-            There are various ways to do this, this function
-            achieves it by using cross products to produce
-            an orthonormal basis.
-        """
-        #calculate the forwards vector directly using spherical coordinates
-        self.forwards = np.array(
-            [
-            np.cos(np.radians(self.eulers[2]))*np.cos(np.radians(self.eulers[1])),
-            np.sin(np.radians(self.eulers[2]))*np.cos(np.radians(self.eulers[1])),
-            np.sin(np.radians(self.eulers[1]))
-            ],
-            dtype=np.float32
-        )
-
-        self.right = pyrr.vector.normalise(np.cross(self.forwards,self.localUp))
-        self.up = pyrr.vector.normalise(np.cross(self.right,self.forwards))
-        
-    def update(self) -> None:
-        """Updates the camera"""
-        self.calculate_vectors()
-
-    def get_view_transform(self) -> np.ndarray:
-        return pyrr.matrix44.create_look_at(
-            eye = self.position,
-            target=self.position + self.forwards,
-            up = self.up,
-            dtype= np.float32
-        )
-    
 
 class Scene:
     """ 
@@ -269,16 +32,17 @@ class Scene:
         self.renderables[OBJECT_CUBE] = [
             Cube(
             position = [6,0,0],
-            eulers = [0,0,0]
+            eulers = [0,0,0],
+            OBJECT_CUBE=OBJECT_CUBE
             ),
         ]
 
         self.camera = Player(
             position = [0,0,2],
-            eulers=[0,0,0]
+            eulers=[0,0,0],
+            OBJECT_CAMERA=OBJECT_CAMERA
         )
-        
-    
+
     def update(self,rate : float) -> None:
         """
             Update all objects managed by the scene.
@@ -550,7 +314,7 @@ class Renderer:
             OBJECT_CUBE: Material("gfx/wood.jpeg"),
         }
 
-        self.shader = Shader("shaders/vertex.txt", "shaders/fragment.txt")
+        self.shader = sdr("shaders/vertex.txt", "shaders/fragment.txt")
 
     def set_onetime_uniforms(self) -> None:
         """ Set any uniforms which can simply get set once and forgotten """
@@ -600,71 +364,5 @@ class Renderer:
         for (_,material) in self.materials.items():
             material.destroy()
         self.shader.deletePgm()
-
-
-class Mesh:
-    """ A general mesh """
-
-
-    def __init__(self):
-
-        self.vertex_count = 0
-
-        self.vao = glGenVertexArrays(1)
-        self.vbo = glGenBuffers(1)
-    
-    def destroy(self):
-        
-        glDeleteVertexArrays(1, (self.vao,))
-        glDeleteBuffers(1,(self.vbo,))
-
-class ObjMesh(Mesh):
-
-
-    def __init__(self, filename):
-
-        super().__init__()
-
-        # x, y, z, s, t, nx, ny, nz
-        vertices = load_model_from_file(filename)
-        self.vertex_count = len(vertices)//8
-        vertices = np.array(vertices, dtype=np.float32)
-
-        glBindVertexArray(self.vao)
-        glBindBuffer(GL_ARRAY_BUFFER, self.vbo)
-        glBufferData(GL_ARRAY_BUFFER, vertices.nbytes, vertices, GL_STATIC_DRAW)
-        #position
-        glEnableVertexAttribArray(0)
-        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 32, ctypes.c_void_p(0))
-        #texture
-        glEnableVertexAttribArray(1)
-        glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 32, ctypes.c_void_p(12))
-        #normal
-        glEnableVertexAttribArray(2)
-        glVertexAttribPointer(2, 3, GL_FLOAT, GL_FALSE, 32, ctypes.c_void_p(20))
-
-class Material:
-
-    
-    def __init__(self, filepath):
-        self.texture = glGenTextures(1)
-        glBindTexture(GL_TEXTURE_2D, self.texture)
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT)
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT)
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST_MIPMAP_LINEAR)
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR)
-        with Image.open(filepath, mode = "r") as image:
-            image_width,image_height = image.size
-            image = image.convert("RGBA")
-            img_data = bytes(image.tobytes())
-            glTexImage2D(GL_TEXTURE_2D,0,GL_RGBA,image_width,image_height,0,GL_RGBA,GL_UNSIGNED_BYTE,img_data)
-        glGenerateMipmap(GL_TEXTURE_2D)
-
-    def use(self):
-        glActiveTexture(GL_TEXTURE0)
-        glBindTexture(GL_TEXTURE_2D,self.texture)
-
-    def destroy(self):
-        glDeleteTextures(1, (self.texture,))
 
 myApp = App(800,600)
