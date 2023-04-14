@@ -1,9 +1,9 @@
 import sys
-sys.path.insert(0,'..\..')
+sys.path.insert(0,'..')
 import glfw
 import glfw.GLFW as GLFW_CONSTANTS
 from OpenGL.GL import *
-from tools.Entities import Entity,Player,Cube
+from tools.Entities import Entity,Player,Square
 from tools.Objects import Mesh,ObjMesh,Material
 from tools.Shader import Shader as sdr
 from tools.Setup import AppSetup
@@ -32,7 +32,7 @@ import pyrr
 
 OBJECT_CUBE = 0
 OBJECT_CAMERA = 1
-CUBE_pth = "models/cube.obj"
+SQUARE_pth = "models/square.obj"
 CUBE_txt_pth = "gfx/wood.jpeg"
 sdr_vtx_pth = "shaders/vertex.txt"
 sdr_frg_pth = "shaders/fragment.txt"
@@ -52,10 +52,10 @@ class Stage(Scene):
 
         self.renderables: dict[int,list[Entity]] = {}
         self.renderables[OBJECT_CUBE] = [
-            Cube(
-            position = [6,0,0],
+            Square(
+            position = [6,0,2],
             eulers = [0,0,0],
-            OBJECT_CUBE=OBJECT_CUBE
+            OBJECT_SQUARE=OBJECT_CUBE
             ),
         ]
 
@@ -102,7 +102,7 @@ class App(AppSetup):
             glfw.poll_events()
 
             #update scene
-            self.scene.update(self.frameTime / 16.667)
+            self.scene.update(0)
             
             self.renderer.render(
                 camera = self.scene.camera,
@@ -154,7 +154,7 @@ class Renderer:
         """
 
         self.meshes: dict[int, Mesh] = {
-            OBJECT_CUBE: ObjMesh(CUBE_pth),
+            OBJECT_CUBE: ObjMesh(SQUARE_pth),
         }
 
         self.materials: dict[int, Material] = {

@@ -64,6 +64,14 @@ class Cube(Entity):
         if self.eulers[2] > 360:
             self.eulers[2] -= 360
 
+class Square(Entity):
+    def __init__(self,position,eulers,OBJECT_SQUARE) -> None:
+        super().__init__(position,eulers,OBJECT_SQUARE)
+
+    def update(self,rate):
+        pass
+
+
 class Player(Entity):
     """ A first person camera controller. """
 
