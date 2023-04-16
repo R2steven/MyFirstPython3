@@ -117,3 +117,4 @@ class Player(Entity):
             up = self.up,
             dtype= np.float32
         )
+    

@@ -3,7 +3,7 @@ sys.path.insert(0,'..')
 import glfw
 import glfw.GLFW as GLFW_CONSTANTS
 from OpenGL.GL import *
-from tools.Entities import Entity,Player,Square
+from tools.Entities import Entity,Player,Square,Cube
 from tools.Objects import Mesh,ObjMesh,Material
 from tools.Shader import Shader as sdr
 from tools.Setup import AppSetup
@@ -30,12 +30,20 @@ import pyrr
 
 ################### Constants        ########################################
 
-OBJECT_CUBE = 0
-OBJECT_CAMERA = 1
+OBJECT_SQUARE = 0
+OBJECT_CUBE = 1
+OBJECT_CAMERA = 2
 SQUARE_pth = "models/square.obj"
+CUBE_pth = "models/cube.obj"
 CUBE_txt_pth = "gfx/wood.jpeg"
-sdr_vtx_pth = "shaders/vertex.txt"
-sdr_frg_pth = "shaders/fragment.txt"
+SCREEN_pth = "models/screen.obj"
+scn_sdr_vtx_pth = "shaders/vertex.txt"
+scn_sdr_frg_pth = "shaders/fragment.txt"
+scrn_sdr_vtx_pth = "shaders/screenVertex.txt"
+scrn_sdr_frg_pth = "shaders/screenFragment.txt"
+
+Screen_Width = 800
+Screen_Height = 600
 
 
 ################### Model #####################################################
@@ -51,12 +59,20 @@ class Stage(Scene):
 
 
         self.renderables: dict[int,list[Entity]] = {}
-        self.renderables[OBJECT_CUBE] = [
+        self.renderables[OBJECT_SQUARE] = [
             Square(
             position = [6,0,2],
             eulers = [0,0,0],
-            OBJECT_SQUARE=OBJECT_CUBE
+            OBJECT_SQUARE=OBJECT_SQUARE
             ),
+        ]
+
+        self.renderables[OBJECT_CUBE] = [
+            Cube(
+            position=[0,6,2],
+            eulers= [0,0,0],
+            OBJECT_CUBE=OBJECT_CUBE
+            )
         ]
 
         self.camera = Player(
@@ -154,14 +170,22 @@ class Renderer:
         """
 
         self.meshes: dict[int, Mesh] = {
-            OBJECT_CUBE: ObjMesh(SQUARE_pth),
+            OBJECT_SQUARE: ObjMesh(SQUARE_pth),
         }
 
         self.materials: dict[int, Material] = {
-            OBJECT_CUBE: Material(CUBE_txt_pth),
+            OBJECT_SQUARE: Material(CUBE_txt_pth),
         }
 
-        self.shader = sdr(sdr_vtx_pth, sdr_frg_pth)
+        self.meshes[OBJECT_CUBE] = ObjMesh(CUBE_pth)
+             
+        self.materials[OBJECT_CUBE] = Material(CUBE_txt_pth)
+
+        self.screenobj = ObjMesh(SCREEN_pth)
+
+        self.SCENEshader = sdr(scn_sdr_vtx_pth, scn_sdr_frg_pth)
+        self.SCREENshader = sdr(scrn_sdr_vtx_pth,scrn_sdr_frg_pth)
+        self.fbo = frameBuffer()
 
     def set_onetime_uniforms(self) -> None:
         """ Set any uniforms which can simply get set once and forgotten """
@@ -171,8 +195,8 @@ class Renderer:
             near = 0.1, far = 100, dtype = np.float32
         )
 
-        self.shader.setMat4fv("projection",projection_transform)
-        self.shader.setInt("imageTexture",0)
+        self.SCENEshader.setMat4fv("projection",projection_transform)
+        self.SCENEshader.setInt("imageTexture",0)
 
     def render(
             self, camera: Player, 
@@ -187,10 +211,12 @@ class Renderer:
         """
 
         #refresh screen
+        self.fbo.use()
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
-        self.shader.use()
+        
+        self.SCENEshader.use()
 
-        self.shader.setMat4fv("view", camera.get_view_transform())
+        self.SCENEshader.setMat4fv("view", camera.get_view_transform())
 
         for objectType,objectList in renderables.items():
             mesh = self.meshes[objectType]
@@ -198,8 +224,17 @@ class Renderer:
             glBindVertexArray(mesh.vao)
             material.use()
             for object in objectList:
-                self.shader.setMat4fv("model",object.get_model_transform())
+                self.SCENEshader.setMat4fv("model",object.get_model_transform())
                 glDrawArrays(GL_TRIANGLES, 0,mesh.vertex_count)
+
+        glBindFramebuffer(GL_FRAMEBUFFER,0)
+        glDisable(GL_DEPTH_TEST)
+        glClear(GL_COLOR_BUFFER_BIT)
+        self.SCREENshader.use()
+        
+        glBindVertexArray(self.screenobj.vao)
+        glBindTexture(GL_TEXTURE_2D,self.fbo.texture)
+        glDrawArrays(GL_TRIANGLES, 0,self.screenobj.vertex_count)
         
         glFlush()
     
@@ -210,6 +245,43 @@ class Renderer:
             mesh.destroy()
         for (_,material) in self.materials.items():
             material.destroy()
-        self.shader.deletePgm()
+        self.SCENEshader.deletePgm()
 
-myApp = App(800,600)
+############### Framebuffers ##################################################
+class frameBuffer:
+    
+    def __init__(self):
+        self.Create_framebuffer()
+
+    def Create_framebuffer(self):
+
+        self.FBufferObj = glGenFramebuffers(1)
+        glBindFramebuffer(GL_FRAMEBUFFER,self.FBufferObj)
+        self.texture = glGenTextures(1)
+        glBindTexture(GL_TEXTURE_2D,self.texture)
+        glTexImage2D(GL_TEXTURE_2D,0,GL_RGBA,Screen_Width,Screen_Height,0,GL_RGBA,GL_UNSIGNED_BYTE,None)
+        glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MIN_FILTER,GL_LINEAR)
+        glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MAG_FILTER,GL_LINEAR)
+        glFramebufferTexture2D(GL_FRAMEBUFFER,GL_COLOR_ATTACHMENT0,GL_TEXTURE_2D,self.texture,0)
+
+        self.renderbuff = glGenRenderbuffers(1)
+        glBindRenderbuffer(GL_RENDERBUFFER,self.renderbuff)
+        glRenderbufferStorage(GL_RENDERBUFFER,GL_DEPTH24_STENCIL8,Screen_Width,Screen_Height)
+        glFramebufferRenderbuffer(GL_FRAMEBUFFER,GL_DEPTH_STENCIL_ATTACHMENT,GL_RENDERBUFFER,self.renderbuff)
+
+    def use(self):
+        glBindFramebuffer(GL_FRAMEBUFFER,self.FBufferObj)
+        glClearColor(0.1,0.1,0.1,0.1)
+        glEnable(GL_DEPTH_TEST)
+        
+
+    def delete(self):
+        glDeleteFramebuffers(1,(self.FBufferObj,))
+
+
+
+
+
+
+
+myApp = App(Screen_Width,Screen_Height)
