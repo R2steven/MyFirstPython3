@@ -9,13 +9,13 @@ class AppSetup:
     """ The main program """
 
 
-    def __init__(self, screenWidth, screenHeight):
+    def __init__(self, screenWidth, screenHeight, verMajor = 3, verMinor = 3):
         """ Set up the program """
 
         self.screenWidth = screenWidth
         self.screenHeight = screenHeight
 
-        self.set_up_glfw()
+        self.set_up_glfw(verMajor,verMinor)
 
         self.make_objects()
 
@@ -26,12 +26,12 @@ class AppSetup:
         self.mainLoop()
 
     
-    def set_up_glfw(self) -> None:
+    def set_up_glfw(self,verMajor,verMinor) -> None:
         """ Set up the glfw environment """
 
         glfw.init()
-        glfw.window_hint(GLFW_CONSTANTS.GLFW_CONTEXT_VERSION_MAJOR,3)
-        glfw.window_hint(GLFW_CONSTANTS.GLFW_CONTEXT_VERSION_MINOR,3)
+        glfw.window_hint(GLFW_CONSTANTS.GLFW_CONTEXT_VERSION_MAJOR,verMajor)
+        glfw.window_hint(GLFW_CONSTANTS.GLFW_CONTEXT_VERSION_MINOR,verMinor)
         glfw.window_hint(
             GLFW_CONSTANTS.GLFW_OPENGL_PROFILE, 
             GLFW_CONSTANTS.GLFW_OPENGL_CORE_PROFILE

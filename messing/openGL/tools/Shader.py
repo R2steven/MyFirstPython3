@@ -9,11 +9,20 @@ class Shader():
         Compile and use Shader
     """
 
-    def __init__(self, vertexPath:str, fragmentPath:str):
-        self.createShader(vertexPath,fragmentPath)
+    def __init__(self, *args ,type = 'G'):
+
+        if (type == 'G'):
+            self.createVFShader(*args)
+        elif (type == 'C'):
+            self.createCShader(*args)
+        elif (type == 'GC'):
+            self.createCVFShader(*args)
         self.unifNames = {None:None}
 
-    def createShader(self,vertexPath:str, fragmentPath:str):
+    def createVFShader(self,*args):
+        
+        vertexPath = args[0]
+        fragmentPath = args[1]
 
         with open(vertexPath,'r') as f:
             vertex_src = f.readlines()
@@ -24,6 +33,31 @@ class Shader():
         self.shader = compileProgram(compileShader(vertex_src,GL_VERTEX_SHADER),
                                      compileShader(fragment_src,GL_FRAGMENT_SHADER))
         
+    def createCShader(self,*args):
+        computePath = args[0]
+
+        with open(computePath,'r') as f:
+            compute_src = f.readlines()
+        self.shader = compileProgram(compileShader(compute_src,GL_COMPUTE_SHADER))
+
+    def createCVFShader(self,*args):
+        vertexPath = args[0]
+        fragmentPath = args[1]
+        computePath = args[2]
+
+        with open(vertexPath,'r') as f:
+            vertex_src = f.readlines()
+
+        with open(fragmentPath,'r') as f:
+            fragment_src = f.readlines()
+
+        with open(computePath,'r') as f:
+            compute_src = f.readlines()
+
+        self.shader = compileProgram(compileShader(vertex_src,GL_VERTEX_SHADER),
+                                     compileShader(fragment_src,GL_FRAGMENT_SHADER),
+                                     compileShader(compute_src,GL_COMPUTE_SHADER))
+
     def use(self) -> None:
         glUseProgram(self.shader)
 
@@ -59,3 +93,5 @@ class Shader():
 
     def deletePgm(self):
         glDeleteProgram(self.shader)
+
+        
